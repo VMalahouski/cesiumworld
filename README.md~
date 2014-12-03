@@ -1,2 +1,5 @@
 cesiumworld
 ===========
+npm install
+node server.js
+
