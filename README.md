@@ -4,5 +4,5 @@ cesiumworld
 2. npm install
 3. node server.js
 
-open http://localhost:6767/My/MyHelloWorld.html
+open http://localhost:6767/worldApp/WorldApp.html
 

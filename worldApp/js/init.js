@@ -5,14 +5,16 @@ initCesiumPlanet();
  * initialization planet and parts
  */
 function initCesiumPlanet() {
-  var russiaUrl = '../../Apps/SampleData/russia_1e-7sr.json',
-    chinaUrl = '../../Apps/SampleData/china.json';
-  viewer = new Cesium.Viewer('cesiumContainer', {
-    imageryProvider: new Cesium.ArcGisMapServerImageryProvider({
-      url: 'http://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer'
-    }),
-    baseLayerPicker: false
-  });
+  var russiaUrl = '../dataJSONs/russia.json',
+    chinaUrl = '../dataJSONs/china.json',
+    belarusUrl = '../dataJSONs/belarus.json';
+  viewer = new Cesium.Viewer('cesiumContainer');
+//  viewer = new Cesium.Viewer('cesiumContainer', {
+//    imageryProvider: new Cesium.ArcGisMapServerImageryProvider({
+//      url: 'http://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer'
+//    }),
+//    baseLayerPicker: false
+//  });
 
   //Устанавливаем точку обзора
   viewer.scene.camera.lookAt(Cesium.Cartesian3.fromDegrees(75, 45, 14000000),
