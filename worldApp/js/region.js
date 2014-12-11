@@ -8,7 +8,8 @@ Cesium.viewerEntityMixin(viewer);
 
 //Example 1: Load a GeoJSON or TopoJSON file with default settings.
 Sandcastle.addDefaultToolbarButton('Basic loading', function() {
-  viewer.dataSources.add(Cesium.GeoJsonDataSource.fromUrl('../../Apps/SampleData/russia.json'));
+  viewer.dataSources.add(Cesium.GeoJsonDataSource.fromUrl('../../Apps/SampleData/russiaRed.json'));
+//  viewer.dataSources.add(Cesium.GeoJsonDataSource.fromUrl('../../Apps/SampleData/russia.json'));
 });
 
 //Example 2: Apply custom graphics to a GeoJSON or TopoJSON file 
@@ -22,7 +23,8 @@ Sandcastle.addToolbarButton('Custom Graphics', function() {
   viewer.dataSources.add(dataSource);
 
   //Load the document into the data source and then set custom graphics
-  dataSource.loadUrl('../../Apps/SampleData/russia.json').then(function() {
+  dataSource.loadUrl('../../Apps/SampleData/russiaRed.json').then(function() {
+//  dataSource.loadUrl('../../Apps/SampleData/russia.json').then(function() {
     //Get the array of entities
     var entities = dataSource.entities.entities;
 
