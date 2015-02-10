@@ -850,19 +850,7 @@ define('Core/Math',[
                 if (!defined(x)) {
             throw new DeveloperError('x is required.');
         }
-                var epsilon10 = CesiumMath.EPSILON10;
-        var pi = CesiumMath.PI;
-        var two_pi = CesiumMath.TWO_PI;
-        while (x < -(pi + epsilon10)) {
-            x += two_pi;
-        }
-        if (x < -pi) {
-            return -pi;
-        }
-        while (x > pi + epsilon10) {
-            x -= two_pi;
-        }
-        return x > pi ? pi : x;
+                return CesiumMath.zeroToTwoPi(x + CesiumMath.PI) - CesiumMath.PI;
     };
 
     /**
@@ -875,35 +863,61 @@ define('Core/Math',[
                 if (!defined(x)) {
             throw new DeveloperError('x is required.');
         }
-                var value = x % CesiumMath.TWO_PI;
-        // We do a second modules here if we add 2Pi to ensure that we don't have any numerical issues with very
-        // small negative values.
-        return (value < 0.0) ? (value + CesiumMath.TWO_PI) % CesiumMath.TWO_PI : value;
+                var mod = CesiumMath.mod(x, CesiumMath.TWO_PI);
+        if (Math.abs(mod) < CesiumMath.EPSILON14 && Math.abs(x) > CesiumMath.EPSILON14) {
+            return CesiumMath.TWO_PI;
+        }
+        return mod;
     };
 
     /**
-     * Determines if two values are equal within the provided epsilon.  This is useful
-     * to avoid problems due to roundoff error when comparing floating-point values directly.
+     * The modulo operation that also works for negative dividends.
+     *
+     * @param {Number} m The dividend.
+     * @param {Number} n The divisor.
+     * @returns {Number} The remainder.
+     */
+    CesiumMath.mod = function(m, n) {
+                if (!defined(m)) {
+            throw new DeveloperError('m is required.');
+        }
+        if (!defined(n)) {
+            throw new DeveloperError('n is required.');
+        }
+                return ((m % n) + n) % n;
+    };
+
+    /**
+     * Determines if two values are equal using an absolute or relative tolerance test. This is useful
+     * to avoid problems due to roundoff error when comparing floating-point values directly. The values are
+     * first compared using an absolute tolerance test. If that fails, a relative tolerance test is performed.
+     * Use this test if you are unsure of the magnitudes of left and right.
      *
      * @param {Number} left The first value to compare.
      * @param {Number} right The other value to compare.
-     * @param {Number} [epsilon=0.0] The maximum inclusive delta between <code>left</code> and <code>right</code> where they will be considered equal.
+     * @param {Number} relativeEpsilon The maximum inclusive delta between <code>left</code> and <code>right</code> for the relative tolerance test.
+     * @param {Number} [absoluteEpsilon=relativeEpsilon] The maximum inclusive delta between <code>left</code> and <code>right</code> for the absolute tolerance test.
      * @returns {Boolean} <code>true</code> if the values are equal within the epsilon; otherwise, <code>false</code>.
      *
      * @example
-     * var b = Cesium.Math.equalsEpsilon(0.0, 0.01, Cesium.Math.EPSILON2); // true
+     * var a = Cesium.Math.equalsEpsilon(0.0, 0.01, Cesium.Math.EPSILON2); // true
      * var b = Cesium.Math.equalsEpsilon(0.0, 0.1, Cesium.Math.EPSILON2);  // false
+     * var c = Cesium.Math.equalsEpsilon(3699175.1634344, 3699175.2, Cesium.Math.EPSILON7); // true
+     * var d = Cesium.Math.equalsEpsilon(3699175.1634344, 3699175.2, Cesium.Math.EPSILON9); // false
      */
-    CesiumMath.equalsEpsilon = function(left, right, epsilon) {
+    CesiumMath.equalsEpsilon = function(left, right, relativeEpsilon, absoluteEpsilon) {
                 if (!defined(left)) {
             throw new DeveloperError('left is required.');
         }
-
         if (!defined(right)) {
             throw new DeveloperError('right is required.');
         }
-                epsilon = defaultValue(epsilon, 0.0);
-        return Math.abs(left - right) <= epsilon;
+        if (!defined(relativeEpsilon)) {
+            throw new DeveloperError('relativeEpsilon is required.');
+        }
+                absoluteEpsilon = defaultValue(absoluteEpsilon, relativeEpsilon);
+        var absDiff = Math.abs(left - right);
+        return absDiff <= absoluteEpsilon || absDiff <= relativeEpsilon * Math.max(Math.abs(left), Math.abs(right));
     };
 
     var factorials = [1];
@@ -1023,7 +1037,7 @@ define('Core/Math',[
      * @param {Number} value The value to constrain.
      * @param {Number} min The minimum value.
      * @param {Number} max The maximum value.
-     * @returns The value clamped so that min <= value <= max.
+     * @returns {Number} The value clamped so that min <= value <= max.
      */
     CesiumMath.clamp = function(value, min, max) {
                 if (!defined(value)) {
@@ -1058,7 +1072,7 @@ define('Core/Math',[
      * Generates a random number in the range of [0.0, 1.0)
      * using a Mersenne twister.
      *
-     * @returns A random number in the range of [0.0, 1.0).
+     * @returns {Number} A random number in the range of [0.0, 1.0).
      *
      * @see CesiumMath.setRandomNumberSeed
      * @see {@link http://en.wikipedia.org/wiki/Mersenne_twister|Mersenne twister on Wikipedia}
@@ -1071,24 +1085,47 @@ define('Core/Math',[
      * Computes <code>Math.acos(value)</acode>, but first clamps <code>value</code> to the range [-1.0, 1.0]
      * so that the function will never return NaN.
      *
-     * @param value The value for which to compute acos.
-     * @returns {number} The acos of the value if the value is in the range [-1.0, 1.0], or the acos of -1.0 or 1.0,
+     * @param {Number} value The value for which to compute acos.
+     * @returns {Number} The acos of the value if the value is in the range [-1.0, 1.0], or the acos of -1.0 or 1.0,
      *          whichever is closer, if the value is outside the range.
      */
     CesiumMath.acosClamped = function(value) {
-        return Math.acos(CesiumMath.clamp(value, -1.0, 1.0));
+                if (!defined(value)) {
+            throw new DeveloperError('value is required.');
+        }
+                return Math.acos(CesiumMath.clamp(value, -1.0, 1.0));
     };
 
     /**
      * Computes <code>Math.asin(value)</acode>, but first clamps <code>value</code> to the range [-1.0, 1.0]
      * so that the function will never return NaN.
      *
-     * @param value The value for which to compute asin.
-     * @returns {number} The asin of the value if the value is in the range [-1.0, 1.0], or the asin of -1.0 or 1.0,
+     * @param {Number} value The value for which to compute asin.
+     * @returns {Number} The asin of the value if the value is in the range [-1.0, 1.0], or the asin of -1.0 or 1.0,
      *          whichever is closer, if the value is outside the range.
      */
     CesiumMath.asinClamped = function(value) {
-        return Math.asin(CesiumMath.clamp(value, -1.0, 1.0));
+                if (!defined(value)) {
+            throw new DeveloperError('value is required.');
+        }
+                return Math.asin(CesiumMath.clamp(value, -1.0, 1.0));
+    };
+
+    /**
+     * Finds the chord length between two points given the circle's radius and the angle between the points.
+     *
+     * @param {Number} angle The angle between the two points.
+     * @param {Number} radius The radius of the circle.
+     * @returns {Number} The chord length.
+     */
+    CesiumMath.chordLength = function(angle, radius) {
+                if (!defined(angle)) {
+            throw new DeveloperError('angle is required.');
+        }
+        if (!defined(radius)) {
+            throw new DeveloperError('radius is required.');
+        }
+                return 2.0 * radius * Math.sin(angle * 0.5);
     };
 
     return CesiumMath;
@@ -1401,7 +1438,7 @@ define('Core/Cartesian3',[
     var distanceScratch = new Cartesian3();
 
     /**
-     * Computes the distance between two points
+     * Computes the distance between two points.
      *
      * @param {Cartesian3} left The first point to compute the distance from.
      * @param {Cartesian3} right The second point to compute the distance to.
@@ -1418,6 +1455,27 @@ define('Core/Cartesian3',[
         
         Cartesian3.subtract(left, right, distanceScratch);
         return Cartesian3.magnitude(distanceScratch);
+    };
+
+    /**
+     * Computes the squared distance between two points.  Comparing squared distances
+     * using this function is more efficient than comparing distances using {@link Cartesian3#distance}.
+     *
+     * @param {Cartesian3} left The first point to compute the distance from.
+     * @param {Cartesian3} right The second point to compute the distance to.
+     * @returns {Number} The distance between two points.
+     *
+     * @example
+     * // Returns 4.0, not 2.0
+     * var d = Cesium.Cartesian3.distance(new Cesium.Cartesian3(1.0, 0.0, 0.0), new Cesium.Cartesian3(3.0, 0.0, 0.0));
+     */
+    Cartesian3.distanceSquared = function(left, right) {
+                if (!defined(left) || !defined(right)) {
+            throw new DeveloperError('left and right are required.');
+        }
+        
+        Cartesian3.subtract(left, right, distanceScratch);
+        return Cartesian3.magnitudeSquared(distanceScratch);
     };
 
     /**
@@ -1736,25 +1794,22 @@ define('Core/Cartesian3',[
 
     /**
      * Compares the provided Cartesians componentwise and returns
-     * <code>true</code> if they are within the provided epsilon,
+     * <code>true</code> if they pass an absolute or relative tolerance test,
      * <code>false</code> otherwise.
      *
      * @param {Cartesian3} [left] The first Cartesian.
      * @param {Cartesian3} [right] The second Cartesian.
-     * @param {Number} epsilon The epsilon to use for equality testing.
+     * @param {Number} relativeEpsilon The relative epsilon tolerance to use for equality testing.
+     * @param {Number} [absoluteEpsilon=relativeEpsilon] The absolute epsilon tolerance to use for equality testing.
      * @returns {Boolean} <code>true</code> if left and right are within the provided epsilon, <code>false</code> otherwise.
      */
-    Cartesian3.equalsEpsilon = function(left, right, epsilon) {
-                if (typeof epsilon !== 'number') {
-            throw new DeveloperError('epsilon is required and must be a number.');
-        }
-        
+    Cartesian3.equalsEpsilon = function(left, right, relativeEpsilon, absoluteEpsilon) {
         return (left === right) ||
-               ((defined(left)) &&
-                (defined(right)) &&
-                (Math.abs(left.x - right.x) <= epsilon) &&
-                (Math.abs(left.y - right.y) <= epsilon) &&
-                (Math.abs(left.z - right.z) <= epsilon));
+               (defined(left) &&
+                defined(right) &&
+                CesiumMath.equalsEpsilon(left.x, right.x, relativeEpsilon, absoluteEpsilon) &&
+                CesiumMath.equalsEpsilon(left.y, right.y, relativeEpsilon, absoluteEpsilon) &&
+                CesiumMath.equalsEpsilon(left.z, right.z, relativeEpsilon, absoluteEpsilon));
     };
 
     /**
@@ -3159,12 +3214,14 @@ define('Core/Cartesian4',[
         './defaultValue',
         './defined',
         './DeveloperError',
-        './freezeObject'
+        './freezeObject',
+        './Math'
     ], function(
         defaultValue,
         defined,
         DeveloperError,
-        freezeObject) {
+        freezeObject,
+        CesiumMath) {
     "use strict";
 
     /**
@@ -3463,7 +3520,7 @@ define('Core/Cartesian4',[
     var distanceScratch = new Cartesian4();
 
     /**
-     * Computes the 4-space distance between two points
+     * Computes the 4-space distance between two points.
      *
      * @param {Cartesian4} left The first point to compute the distance from.
      * @param {Cartesian4} right The second point to compute the distance to.
@@ -3471,7 +3528,9 @@ define('Core/Cartesian4',[
      *
      * @example
      * // Returns 1.0
-     * var d = Cesium.Cartesian4.distance(new Cesium.Cartesian4(1.0, 0.0, 0.0, 0.0), new Cesium.Cartesian4(2.0, 0.0, 0.0, 0.0));
+     * var d = Cesium.Cartesian4.distance(
+     *   new Cesium.Cartesian4(1.0, 0.0, 0.0, 0.0),
+     *   new Cesium.Cartesian4(2.0, 0.0, 0.0, 0.0));
      */
     Cartesian4.distance = function(left, right) {
                 if (!defined(left) || !defined(right)) {
@@ -3480,6 +3539,29 @@ define('Core/Cartesian4',[
         
         Cartesian4.subtract(left, right, distanceScratch);
         return Cartesian4.magnitude(distanceScratch);
+    };
+
+    /**
+     * Computes the squared distance between two points.  Comparing squared distances
+     * using this function is more efficient than comparing distances using {@link Cartesian4#distance}.
+     *
+     * @param {Cartesian4} left The first point to compute the distance from.
+     * @param {Cartesian4} right The second point to compute the distance to.
+     * @returns {Number} The distance between two points.
+     *
+     * @example
+     * // Returns 4.0, not 2.0
+     * var d = Cesium.Cartesian4.distance(
+     *   new Cesium.Cartesian4(1.0, 0.0, 0.0, 0.0),
+     *   new Cesium.Cartesian4(3.0, 0.0, 0.0, 0.0));
+     */
+    Cartesian4.distanceSquared = function(left, right) {
+                if (!defined(left) || !defined(right)) {
+            throw new DeveloperError('left and right are required.');
+        }
+        
+        Cartesian4.subtract(left, right, distanceScratch);
+        return Cartesian4.magnitudeSquared(distanceScratch);
     };
 
     /**
@@ -3793,26 +3875,23 @@ define('Core/Cartesian4',[
 
     /**
      * Compares the provided Cartesians componentwise and returns
-     * <code>true</code> if they are within the provided epsilon,
+     * <code>true</code> if they pass an absolute or relative tolerance test,
      * <code>false</code> otherwise.
      *
      * @param {Cartesian4} [left] The first Cartesian.
      * @param {Cartesian4} [right] The second Cartesian.
-     * @param {Number} epsilon The epsilon to use for equality testing.
+     * @param {Number} relativeEpsilon The relative epsilon tolerance to use for equality testing.
+     * @param {Number} [absoluteEpsilon=relativeEpsilon] The absolute epsilon tolerance to use for equality testing.
      * @returns {Boolean} <code>true</code> if left and right are within the provided epsilon, <code>false</code> otherwise.
      */
-    Cartesian4.equalsEpsilon = function(left, right, epsilon) {
-                if (typeof epsilon !== 'number') {
-            throw new DeveloperError('epsilon is required and must be a number.');
-        }
-        
+    Cartesian4.equalsEpsilon = function(left, right, relativeEpsilon, absoluteEpsilon) {
         return (left === right) ||
-               ((defined(left)) &&
-                (defined(right)) &&
-                (Math.abs(left.x - right.x) <= epsilon) &&
-                (Math.abs(left.y - right.y) <= epsilon) &&
-                (Math.abs(left.z - right.z) <= epsilon) &&
-                (Math.abs(left.w - right.w) <= epsilon));
+               (defined(left) &&
+                defined(right) &&
+                CesiumMath.equalsEpsilon(left.x, right.x, relativeEpsilon, absoluteEpsilon) &&
+                CesiumMath.equalsEpsilon(left.y, right.y, relativeEpsilon, absoluteEpsilon) &&
+                CesiumMath.equalsEpsilon(left.z, right.z, relativeEpsilon, absoluteEpsilon) &&
+                CesiumMath.equalsEpsilon(left.w, right.w, relativeEpsilon, absoluteEpsilon));
     };
 
     /**
@@ -5601,7 +5680,7 @@ define('Core/Matrix4',[
      * and a Cartesian3 representing the translation.
      *
      * @param {Matrix3} rotation The upper left portion of the matrix representing the rotation.
-     * @param {Cartesian3} translation The upper right portion of the matrix representing the translation.
+     * @param {Cartesian3} [translation=Cartesian3.ZERO] The upper right portion of the matrix representing the translation.
      * @param {Matrix4} [result] The object in which the result will be stored, if undefined a new instance will be created.
      * @returns The modified result parameter, or a new Matrix4 instance if one was not provided.
      */
@@ -5609,10 +5688,9 @@ define('Core/Matrix4',[
                 if (!defined(rotation)) {
             throw new DeveloperError('rotation is required.');
         }
-        if (!defined(translation)) {
-            throw new DeveloperError('translation is required.');
-        }
         
+        translation = defaultValue(translation, Cartesian3.ZERO);
+
         if (!defined(result)) {
             return new Matrix4(rotation[0], rotation[3], rotation[6], translation.x,
                                rotation[1], rotation[4], rotation[7], translation.y,
@@ -5728,6 +5806,10 @@ define('Core/Matrix4',[
      * @see Matrix4.multiplyByTranslation
      */
     Matrix4.fromTranslation = function(translation, result) {
+                if (!defined(translation)) {
+            throw new DeveloperError('translation is required.');
+        }
+        
         return Matrix4.fromRotationTranslation(Matrix3.IDENTITY, translation, result);
     };
 
@@ -6797,6 +6879,82 @@ define('Core/Matrix4',[
 
     /**
      * Multiplies a transformation matrix (with a bottom row of <code>[0.0, 0.0, 0.0, 1.0]</code>)
+     * by a 3x3 rotation matrix.  This is an optimization
+     * for <code>Matrix4.multiply(m, Matrix4.fromRotationTranslation(rotation), m);</code> with less allocations and arithmetic operations.
+     *
+     * @param {Matrix4} matrix The matrix on the left-hand side.
+     * @param {Matrix3} rotation The 3x3 rotation matrix on the right-hand side.
+     * @param {Matrix4} result The object onto which to store the result.
+     * @returns {Matrix4} The modified result parameter.
+     *
+     * @example
+     * // Instead of Cesium.Matrix4.multiply(m, Cesium.Matrix4.fromRotationTranslation(rotation), m);
+     * Cesium.Matrix4.multiplyByMatrix3(m, rotation, m);
+     */
+    Matrix4.multiplyByMatrix3 = function(matrix, rotation, result) {
+                if (!defined(matrix)) {
+            throw new DeveloperError('matrix is required');
+        }
+        if (!defined(rotation)) {
+            throw new DeveloperError('rotation is required');
+        }
+        if (!defined(result)) {
+            throw new DeveloperError('result is required,');
+        }
+        
+        var left0 = matrix[0];
+        var left1 = matrix[1];
+        var left2 = matrix[2];
+        var left4 = matrix[4];
+        var left5 = matrix[5];
+        var left6 = matrix[6];
+        var left8 = matrix[8];
+        var left9 = matrix[9];
+        var left10 = matrix[10];
+
+        var right0 = rotation[0];
+        var right1 = rotation[1];
+        var right2 = rotation[2];
+        var right4 = rotation[3];
+        var right5 = rotation[4];
+        var right6 = rotation[5];
+        var right8 = rotation[6];
+        var right9 = rotation[7];
+        var right10 = rotation[8];
+
+        var column0Row0 = left0 * right0 + left4 * right1 + left8 * right2;
+        var column0Row1 = left1 * right0 + left5 * right1 + left9 * right2;
+        var column0Row2 = left2 * right0 + left6 * right1 + left10 * right2;
+
+        var column1Row0 = left0 * right4 + left4 * right5 + left8 * right6;
+        var column1Row1 = left1 * right4 + left5 * right5 + left9 * right6;
+        var column1Row2 = left2 * right4 + left6 * right5 + left10 * right6;
+
+        var column2Row0 = left0 * right8 + left4 * right9 + left8 * right10;
+        var column2Row1 = left1 * right8 + left5 * right9 + left9 * right10;
+        var column2Row2 = left2 * right8 + left6 * right9 + left10 * right10;
+
+        result[0] = column0Row0;
+        result[1] = column0Row1;
+        result[2] = column0Row2;
+        result[3] = 0.0;
+        result[4] = column1Row0;
+        result[5] = column1Row1;
+        result[6] = column1Row2;
+        result[7] = 0.0;
+        result[8] = column2Row0;
+        result[9] = column2Row1;
+        result[10] = column2Row2;
+        result[11] = 0.0;
+        result[12] = matrix[12];
+        result[13] = matrix[13];
+        result[14] = matrix[14];
+        result[15] = matrix[15];
+        return result;
+    };
+
+    /**
+     * Multiplies a transformation matrix (with a bottom row of <code>[0.0, 0.0, 0.0, 1.0]</code>)
      * by an implicit translation matrix defined by a {@link Cartesian3}.  This is an optimization
      * for <code>Matrix4.multiply(m, Matrix4.fromTranslation(position), m);</code> with less allocations and arithmetic operations.
      *
@@ -6804,8 +6962,6 @@ define('Core/Matrix4',[
      * @param {Cartesian3} translation The translation on the right-hand side.
      * @param {Matrix4} result The object onto which to store the result.
      * @returns {Matrix4} The modified result parameter.
-     *
-     * @see Matrix4.fromTranslation
      *
      * @example
      * // Instead of Cesium.Matrix4.multiply(m, Cesium.Matrix4.fromTranslation(position), m);
@@ -7280,24 +7436,33 @@ define('Core/Matrix4',[
      * //Prints "Both matrices are equal" on the console
      */
     Matrix4.equals = function(left, right) {
+        // Given that most matrices will be transformation matrices, the elements
+        // are tested in order such that the test is likely to fail as early
+        // as possible.  I _think_ this is just as friendly to the L1 cache
+        // as testing in index order.  It is certainty faster in practice.
         return (left === right) ||
                (defined(left) &&
                 defined(right) &&
-                left[0] === right[0] &&
-                left[1] === right[1] &&
-                left[2] === right[2] &&
-                left[3] === right[3] &&
-                left[4] === right[4] &&
-                left[5] === right[5] &&
-                left[6] === right[6] &&
-                left[7] === right[7] &&
-                left[8] === right[8] &&
-                left[9] === right[9] &&
-                left[10] === right[10] &&
-                left[11] === right[11] &&
+                // Translation
                 left[12] === right[12] &&
                 left[13] === right[13] &&
                 left[14] === right[14] &&
+
+                // Rotation/scale
+                left[0] === right[0] &&
+                left[1] === right[1] &&
+                left[2] === right[2] &&
+                left[4] === right[4] &&
+                left[5] === right[5] &&
+                left[6] === right[6] &&
+                left[8] === right[8] &&
+                left[9] === right[9] &&
+                left[10] === right[10] &&
+
+                // Bottom row
+                left[3] === right[3] &&
+                left[7] === right[7] &&
+                left[11] === right[11] &&
                 left[15] === right[15]);
     };
 
@@ -7821,11 +7986,76 @@ define('Core/Matrix4',[
     return Matrix4;
 });
 
+/*global define,console*/
+define('Core/deprecationWarning',[
+        './defined',
+        './DeveloperError'
+    ], function(
+        defined,
+        DeveloperError) {
+    "use strict";
+
+    var warnings = {};
+
+    /**
+     * Logs a deprecation message to the console.  Use this function instead of
+     * <code>console.log</code> directly since this does not log duplicate messages
+     * unless it is called from multiple workers.
+     *
+     * @exports deprecationWarning
+     *
+     * @param {String} identifier The unique identifier for this deprecated API.
+     * @param {String} message The message to log to the console.
+     *
+     * @example
+     * // Deprecated function or class
+     * var Foo = function() {
+     *    deprecationWarning('Foo', 'Foo was deprecated in Cesium 1.01.  It will be removed in 1.03.  Use newFoo instead.');
+     *    // ...
+     * }
+     *
+     * // Deprecated function
+     * Bar.prototype.func = function() {
+     *    deprecationWarning('Bar.func', 'Bar.func() was deprecated in Cesium 1.01.  It will be removed in 1.03.  Use Bar.newFunc() instead.');
+     *    // ...
+     * };
+     *
+     * // Deprecated property
+     * defineProperties(Bar.prototype, {
+     *     prop : {
+     *         get : function() {
+     *             deprecationWarning('Bar.prop', 'Bar.prop was deprecated in Cesium 1.01.  It will be removed in 1.03.  Use Bar.newProp instead.');
+     *             // ...
+     *         },
+     *         set : function(value) {
+     *             deprecationWarning('Bar.prop', 'Bar.prop was deprecated in Cesium 1.01.  It will be removed in 1.03.  Use Bar.newProp instead.');
+     *             // ...
+     *         }
+     *     }
+     * });
+     *
+     * @private
+     */
+    var deprecationWarning = function(identifier, message) {
+                if (!defined(identifier) || !defined(message)) {
+            throw new DeveloperError('identifier and message are required.');
+        }
+        
+        if (!defined(warnings[identifier])) {
+            warnings[identifier] = true;
+            console.log(message);
+        }
+    };
+
+    return deprecationWarning;
+});
 /*global define*/
 define('Core/Rectangle',[
         './Cartographic',
         './defaultValue',
         './defined',
+        './defineProperties',
+        './deprecationWarning',
         './DeveloperError',
         './Ellipsoid',
         './freezeObject',
@@ -7834,6 +8064,8 @@ define('Core/Rectangle',[
         Cartographic,
         defaultValue,
         defined,
+        defineProperties,
+        deprecationWarning,
         DeveloperError,
         Ellipsoid,
         freezeObject,
@@ -7885,6 +8117,59 @@ define('Core/Rectangle',[
          * @default 0.0
          */
         this.north = defaultValue(north, 0.0);
+    };
+
+    defineProperties(Rectangle.prototype, {
+        /**
+         * Gets the width of the rectangle in radians.
+         * @memberof Rectangle.prototype
+         * @type {Number}
+         */
+        width : {
+            get : function() {
+                return Rectangle.computeWidth(this);
+            }
+        },
+
+        /**
+         * Gets the height of the rectangle in radians.
+         * @memberof Rectangle.prototype
+         * @type {Number}
+         */
+        height : {
+            get : function() {
+                return Rectangle.computeHeight(this);
+            }
+        }
+    });
+
+    /**
+     * Computes the width of a rectangle in radians.
+     * @param {Rectangle} rectangle The rectangle to compute the width of.
+     * @returns {Number} The width.
+     */
+    Rectangle.computeWidth = function(rectangle) {
+                if (!defined(rectangle)) {
+            throw new DeveloperError('rectangle is required.');
+        }
+                var east = rectangle.east;
+        var west = rectangle.west;
+        if (east < west) {
+            east += CesiumMath.TWO_PI;
+        }
+        return east - west;
+    };
+
+    /**
+     * Computes the height of a rectangle in radians.
+     * @param {Rectangle} rectangle The rectangle to compute the height of.
+     * @returns {Number} The height.
+     */
+    Rectangle.computeHeight = function(rectangle) {
+                if (!defined(rectangle)) {
+            throw new DeveloperError('rectangle is required.');
+        }
+                return rectangle.north - rectangle.south;
     };
 
     /**
@@ -8242,17 +8527,19 @@ define('Core/Rectangle',[
         var east = rectangle.east;
         var west = rectangle.west;
 
-        var longitude = (west + east) * 0.5;
         if (east < west) {
-            longitude = CesiumMath.negativePiToPi(longitude + CesiumMath.PI);
+            east += CesiumMath.TWO_PI;
         }
 
+        var longitude = CesiumMath.negativePiToPi((west + east) * 0.5);
+        var latitude = (rectangle.south + rectangle.north) * 0.5;
+
         if (!defined(result)) {
-            return new Cartographic(longitude, (rectangle.south + rectangle.north) * 0.5);
+            return new Cartographic(longitude, latitude);
         }
 
         result.longitude = longitude;
-        result.latitude = (rectangle.south + rectangle.north) * 0.5;
+        result.latitude = latitude;
         result.height = 0.0;
         return result;
     };
@@ -8263,9 +8550,71 @@ define('Core/Rectangle',[
      * @param {Rectangle} rectangle On rectangle to find an intersection
      * @param {Rectangle} otherRectangle Another rectangle to find an intersection
      * @param {Rectangle} [result] The object onto which to store the result.
+     * @returns {Rectangle|undefined} The modified result parameter, a new Rectangle instance if none was provided or undefined if there is no intersection.
+     */
+    Rectangle.intersection = function(rectangle, otherRectangle, result) {
+                if (!defined(rectangle)) {
+            throw new DeveloperError('rectangle is required');
+        }
+        if (!defined(otherRectangle)) {
+            throw new DeveloperError('otherRectangle is required.');
+        }
+        
+        var rectangleEast = rectangle.east;
+        var rectangleWest = rectangle.west;
+
+        var otherRectangleEast = otherRectangle.east;
+        var otherRectangleWest = otherRectangle.west;
+
+        if (rectangleEast < rectangleWest && otherRectangleEast > 0.0) {
+            rectangleEast += CesiumMath.TWO_PI;
+        } else if (otherRectangleEast < otherRectangleWest && rectangleEast > 0.0) {
+            otherRectangleEast += CesiumMath.TWO_PI;
+        }
+
+        if (rectangleEast < rectangleWest && otherRectangleWest < 0.0) {
+            otherRectangleWest += CesiumMath.TWO_PI;
+        } else if (otherRectangleEast < otherRectangleWest && rectangleWest < 0.0) {
+            rectangleWest += CesiumMath.TWO_PI;
+        }
+
+        var west = CesiumMath.negativePiToPi(Math.max(rectangleWest, otherRectangleWest));
+        var east = CesiumMath.negativePiToPi(Math.min(rectangleEast, otherRectangleEast));
+
+        if ((rectangle.west < rectangle.east || otherRectangle.west < otherRectangle.east) && east <= west) {
+            return undefined;
+        }
+
+        var south = Math.max(rectangle.south, otherRectangle.south);
+        var north = Math.min(rectangle.north, otherRectangle.north);
+
+        if (south >= north) {
+            return undefined;
+        }
+
+        if (!defined(result)) {
+            return new Rectangle(west, south, east, north);
+        }
+        result.west = west;
+        result.south = south;
+        result.east = east;
+        result.north = north;
+        return result;
+    };
+
+    /**
+     * Computes the intersection of two rectangles
+     *
+     * @deprecated
+     *
+     * @param {Rectangle} rectangle On rectangle to find an intersection
+     * @param {Rectangle} otherRectangle Another rectangle to find an intersection
+     * @param {Rectangle} [result] The object onto which to store the result.
      * @returns {Rectangle} The modified result parameter or a new Rectangle instance if none was provided.
      */
     Rectangle.intersectWith = function(rectangle, otherRectangle, result) {
+        deprecationWarning('Rectangle.intersectWith', 'Rectangle.intersectWith was deprecated in Cesium 1.5. It will be removed in Cesium 1.6. Use Rectangle.intersection.');
+
                 if (!defined(rectangle)) {
             throw new DeveloperError('rectangle is required');
         }
@@ -8288,6 +8637,25 @@ define('Core/Rectangle',[
     };
 
     /**
+     * Determines if the rectangle is empty, i.e., if <code>west >= east</code>
+     * or <code>south >= north</code>.
+     *
+     * @deprecated
+     *
+     * @param {Rectangle} rectangle The rectangle
+     * @returns {Boolean} True if the rectangle is empty; otherwise, false.
+     */
+    Rectangle.isEmpty = function(rectangle) {
+        deprecationWarning('Rectangle.isEmpty', 'Rectangle.isEmpty was deprecated in Cesium 1.5. It will be removed in Cesium 1.6.');
+
+                if (!defined(rectangle)) {
+            throw new DeveloperError('rectangle is required');
+        }
+        
+        return rectangle.west >= rectangle.east || rectangle.south >= rectangle.north;
+    };
+
+    /**
      * Returns true if the cartographic is on or inside the rectangle, false otherwise.
      *
      * @param {Rectangle} rectangle The rectangle
@@ -8302,25 +8670,22 @@ define('Core/Rectangle',[
             throw new DeveloperError('cartographic is required.');
         }
         
-        return cartographic.longitude >= rectangle.west &&
-               cartographic.longitude <= rectangle.east &&
-               cartographic.latitude >= rectangle.south &&
-               cartographic.latitude <= rectangle.north;
-    };
+        var longitude = cartographic.longitude;
+        var latitude = cartographic.latitude;
 
-    /**
-     * Determines if the rectangle is empty, i.e., if <code>west >= east</code>
-     * or <code>south >= north</code>.
-     *
-     * @param {Rectangle} rectangle The rectangle
-     * @returns {Boolean} True if the rectangle is empty; otherwise, false.
-     */
-    Rectangle.isEmpty = function(rectangle) {
-                if (!defined(rectangle)) {
-            throw new DeveloperError('rectangle is required');
+        var west = rectangle.west;
+        var east = rectangle.east;
+
+        if (east < west) {
+            east += CesiumMath.TWO_PI;
+            if (longitude < 0.0) {
+                longitude += CesiumMath.TWO_PI;
+            }
         }
-        
-        return rectangle.west >= rectangle.east || rectangle.south >= rectangle.north;
+        return (longitude > west || CesiumMath.equalsEpsilon(longitude, west, CesiumMath.EPSILON14)) &&
+               (longitude < east || CesiumMath.equalsEpsilon(longitude, east, CesiumMath.EPSILON14)) &&
+               latitude >= rectangle.south &&
+               latitude <= rectangle.north;
     };
 
     var subsampleLlaScratch = new Cartographic();
@@ -8382,9 +8747,8 @@ define('Core/Rectangle',[
         }
 
         for ( var i = 1; i < 8; ++i) {
-            var temp = -Math.PI + i * CesiumMath.PI_OVER_TWO;
-            if (west < temp && temp < east) {
-                lla.longitude = temp;
+            lla.longitude = -Math.PI + i * CesiumMath.PI_OVER_TWO;
+            if (Rectangle.contains(rectangle, lla)) {
                 result[length] = ellipsoid.cartographicToCartesian(lla, result[length]);
                 length++;
             }
@@ -11920,6 +12284,7 @@ define('Core/IntersectionTests',[
     var sScratch = new Cartesian3();
     var closestScratch = new Cartesian3();
     var surfPointScratch = new Cartographic();
+
     /**
      * Provides the point along the ray which is nearest to the ellipsoid.
      *
@@ -11938,8 +12303,7 @@ define('Core/IntersectionTests',[
         var position = ray.origin;
         var direction = ray.direction;
 
-        var normal = ellipsoid.geodeticSurfaceNormal(position);
-
+        var normal = ellipsoid.geodeticSurfaceNormal(position, firstAxisScratch);
         if (Cartesian3.dot(direction, normal) >= 0.0) { // The location provided is the closest point in altitude
             return position;
         }
@@ -11947,10 +12311,10 @@ define('Core/IntersectionTests',[
         var intersects = defined(this.rayEllipsoid(ray, ellipsoid));
 
         // Compute the scaled direction vector.
-        var f = ellipsoid.transformPositionToScaledSpace(direction);
+        var f = ellipsoid.transformPositionToScaledSpace(direction, firstAxisScratch);
 
         // Constructs a basis from the unit scaled direction vector. Construct its rotation and transpose.
-        var firstAxis = Cartesian3.normalize(f, firstAxisScratch);
+        var firstAxis = Cartesian3.normalize(f, f);
         var reference = Cartesian3.mostOrthogonalAxis(f, referenceScratch);
         var secondAxis = Cartesian3.normalize(Cartesian3.cross(reference, firstAxis, secondAxisScratch), secondAxisScratch);
         var thirdAxis  = Cartesian3.normalize(Cartesian3.cross(firstAxis, secondAxis, thirdAxisScratch), thirdAxisScratch);
@@ -12012,7 +12376,7 @@ define('Core/IntersectionTests',[
             altitude = Cartesian3.magnitude(Cartesian3.subtract(closest, position, referenceScratch)) * Math.sqrt(1.0 - maximumValue * maximumValue);
             altitude = intersects ? -altitude : altitude;
             surfacePoint.height = altitude;
-            return ellipsoid.cartographicToCartesian(surfacePoint);
+            return ellipsoid.cartographicToCartesian(surfacePoint, new Cartesian3());
         }
 
         return undefined;
@@ -12382,9 +12746,9 @@ define('Core/PolylinePipeline',[
      */
     var PolylinePipeline = {};
 
-    PolylinePipeline.numberOfPoints = function(p0, p1, granularity) {
-        var angleBetween = Cartesian3.angleBetween(p0, p1);
-        return Math.ceil(angleBetween / granularity);
+    PolylinePipeline.numberOfPoints = function(p0, p1, minDistance) {
+        var distance = Cartesian3.distance(p0, p1);
+        return Math.ceil(distance / minDistance);
     };
 
     var cartoScratch = new Cartographic();
@@ -12407,8 +12771,12 @@ define('Core/PolylinePipeline',[
     var wrapLongitudeIntersection = new Cartesian3();
     var wrapLongitudeOffset = new Cartesian3();
 
+    var subdivideHeightsScratchArray = [];
+
     function subdivideHeights(numPoints, h0, h1) {
-        var heights = new Array(numPoints);
+        var heights = subdivideHeightsScratchArray;
+        heights.length = numPoints;
+
         var i;
         if (h0 === h1) {
             for (i = 0; i < numPoints; i++) {
@@ -12418,14 +12786,13 @@ define('Core/PolylinePipeline',[
         }
 
         var dHeight = h1 - h0;
-        var heightPerVertex = dHeight / (numPoints);
+        var heightPerVertex = dHeight / numPoints;
 
-        for (i = 1; i < numPoints; i++) {
+        for (i = 0; i < numPoints; i++) {
             var h = h0 + i*heightPerVertex;
             heights[i] = h;
         }
 
-        heights[0] = h0;
         return heights;
     }
 
@@ -12435,13 +12802,14 @@ define('Core/PolylinePipeline',[
     var scaleFirst = new Cartesian3();
     var scaleLast = new Cartesian3();
     var ellipsoidGeodesic = new EllipsoidGeodesic();
+
     //Returns subdivided line scaled to ellipsoid surface starting at p1 and ending at p2.
     //Result includes p1, but not include p2.  This function is called for a sequence of line segments,
     //and this prevents duplication of end point.
-    function generateCartesianArc(p0, p1, granularity, ellipsoid, h0, h1, array, offset) {
+    function generateCartesianArc(p0, p1, minDistance, ellipsoid, h0, h1, array, offset) {
         var first = ellipsoid.scaleToGeodeticSurface(p0, scaleFirst);
         var last = ellipsoid.scaleToGeodeticSurface(p1, scaleLast);
-        var numPoints = PolylinePipeline.numberOfPoints(p0, p1, granularity);
+        var numPoints = PolylinePipeline.numberOfPoints(p0, p1, minDistance);
         var start = ellipsoid.cartesianToCartographic(first, carto1);
         var end = ellipsoid.cartesianToCartographic(last, carto2);
         var heights = subdivideHeights(numPoints, h0, h1);
@@ -12545,6 +12913,8 @@ define('Core/PolylinePipeline',[
         };
     };
 
+    var removeDuplicatesEpsilon = CesiumMath.EPSILON7;
+
     /**
      * Removes adjacent duplicate positions in an array of positions.
      *
@@ -12576,7 +12946,7 @@ define('Core/PolylinePipeline',[
         for (i = 1; i < length; ++i) {
             v0 = positions[i - 1];
             v1 = positions[i];
-            if (Cartesian3.equals(v0, v1)) {
+            if (Cartesian3.equalsEpsilon(v0, v1, removeDuplicatesEpsilon)) {
                 break;
             }
         }
@@ -12585,13 +12955,11 @@ define('Core/PolylinePipeline',[
             return undefined;
         }
 
-        var cleanedPositions = [];
-        cleanedPositions.push(positions[0]);
-
+        var cleanedPositions = positions.slice(0, i);
         for (; i < length; ++i) {
             v0 = positions[i - 1];
             v1 = positions[i];
-            if (!Cartesian3.equals(v0, v1)) {
+            if (!Cartesian3.equalsEpsilon(v0, v1, removeDuplicatesEpsilon)) {
                 cleanedPositions.push(Cartesian3.clone(v1));
             }
         }
@@ -12629,43 +12997,40 @@ define('Core/PolylinePipeline',[
         
         var ellipsoid = defaultValue(options.ellipsoid, Ellipsoid.WGS84);
         var height = defaultValue(options.height, 0);
-        var granularity = defaultValue(options.granularity, CesiumMath.RADIANS_PER_DEGREE);
+        var minDistance = options.minDistance;
+        if (!defined(minDistance)) {
+            var granularity = defaultValue(options.granularity, CesiumMath.RADIANS_PER_DEGREE);
+            minDistance = CesiumMath.chordLength(granularity, ellipsoid.maximumRadius);
+        }
 
         var length = positions.length;
         var numPoints = 0;
         var i;
-        var p0;
-        var p1;
 
-        for (i = 0; i < length-1; i++) {
-            p0 = positions[i];
-            p1 = positions[i+1];
-            numPoints += PolylinePipeline.numberOfPoints(p0, p1, granularity);
+        for (i = 0; i < length -1; i++) {
+            numPoints += PolylinePipeline.numberOfPoints(positions[i], positions[i+1], minDistance);
         }
-        numPoints++;
-        var arrayLength = numPoints * 3;
+
+        var arrayLength = (numPoints + 1) * 3;
         var newPositions = new Array(arrayLength);
         var offset = 0;
+        var hasHeightArray = isArray(height);
+
         for (i = 0; i < length - 1; i++) {
-            p0 = positions[i];
-            p1 = positions[i + 1];
+            var p0 = positions[i];
+            var p1 = positions[i + 1];
 
-            var h0;
-            var h1;
-            if (isArray(height)) {
-                h0 = height[i];
-                h1 = height[i + 1];
-            } else {
-                h0 = height;
-                h1 = height;
-            }
+            var h0 = hasHeightArray ? height[i] : height;
+            var h1 = hasHeightArray ? height[i + 1] : height;
 
-            offset = generateCartesianArc(p0, p1, granularity, ellipsoid, h0, h1, newPositions, offset);
+            offset = generateCartesianArc(p0, p1, minDistance, ellipsoid, h0, h1, newPositions, offset);
         }
+
+        subdivideHeightsScratchArray.length = 0;
 
         var lastPoint = positions[length - 1];
         var carto = ellipsoid.cartesianToCartographic(lastPoint, carto1);
-        carto.height = isArray(height) ? height[length - 1] : height;
+        carto.height = hasHeightArray ? height[length - 1] : height;
         var cart = ellipsoid.cartographicToCartesian(carto, cartesian);
         Cartesian3.pack(cart, newPositions, arrayLength - 3);
 
@@ -12981,7 +13346,7 @@ define('Core/Cartesian2',[
     var distanceScratch = new Cartesian2();
 
     /**
-     * Computes the distance between two points
+     * Computes the distance between two points.
      *
      * @param {Cartesian2} left The first point to compute the distance from.
      * @param {Cartesian2} right The second point to compute the distance to.
@@ -12998,6 +13363,27 @@ define('Core/Cartesian2',[
         
         Cartesian2.subtract(left, right, distanceScratch);
         return Cartesian2.magnitude(distanceScratch);
+    };
+
+    /**
+     * Computes the squared distance between two points.  Comparing squared distances
+     * using this function is more efficient than comparing distances using {@link Cartesian2#distance}.
+     *
+     * @param {Cartesian2} left The first point to compute the distance from.
+     * @param {Cartesian2} right The second point to compute the distance to.
+     * @returns {Number} The distance between two points.
+     *
+     * @example
+     * // Returns 4.0, not 2.0
+     * var d = Cesium.Cartesian2.distance(new Cesium.Cartesian2(1.0, 0.0), new Cesium.Cartesian2(3.0, 0.0));
+     */
+    Cartesian2.distanceSquared = function(left, right) {
+                if (!defined(left) || !defined(right)) {
+            throw new DeveloperError('left and right are required.');
+        }
+        
+        Cartesian2.subtract(left, right, distanceScratch);
+        return Cartesian2.magnitudeSquared(distanceScratch);
     };
 
     /**
@@ -13297,24 +13683,21 @@ define('Core/Cartesian2',[
 
     /**
      * Compares the provided Cartesians componentwise and returns
-     * <code>true</code> if they are within the provided epsilon,
+     * <code>true</code> if they pass an absolute or relative tolerance test,
      * <code>false</code> otherwise.
      *
      * @param {Cartesian2} [left] The first Cartesian.
      * @param {Cartesian2} [right] The second Cartesian.
-     * @param {Number} epsilon The epsilon to use for equality testing.
+     * @param {Number} relativeEpsilon The relative epsilon tolerance to use for equality testing.
+     * @param {Number} [absoluteEpsilon=relativeEpsilon] The absolute epsilon tolerance to use for equality testing.
      * @returns {Boolean} <code>true</code> if left and right are within the provided epsilon, <code>false</code> otherwise.
      */
-    Cartesian2.equalsEpsilon = function(left, right, epsilon) {
-                if (typeof epsilon !== 'number') {
-            throw new DeveloperError('epsilon is required and must be a number.');
-        }
-        
+    Cartesian2.equalsEpsilon = function(left, right, relativeEpsilon, absoluteEpsilon) {
         return (left === right) ||
-               ((defined(left)) &&
-                (defined(right)) &&
-                (Math.abs(left.x - right.x) <= epsilon) &&
-                (Math.abs(left.y - right.y) <= epsilon));
+               (defined(left) &&
+                defined(right) &&
+                CesiumMath.equalsEpsilon(left.x, right.x, relativeEpsilon, absoluteEpsilon) &&
+                CesiumMath.equalsEpsilon(left.y, right.y, relativeEpsilon, absoluteEpsilon));
     };
 
     /**
@@ -15473,7 +15856,7 @@ define('Core/JulianDate',[
             }
         } else {
             //If no time is specified, it is considered the beginning of the day, local time.
-            minute = minute + new Date(Date.UTC(year, month - 1, day)).getTimezoneOffset();
+            minute = minute + new Date(year, month - 1, day).getTimezoneOffset();
         }
 
         //ISO8601 denotes a leap second by any time having a seconds component of 60 seconds.
@@ -16255,7 +16638,7 @@ define('Core/loadWithXhr',[
      *     responseType : 'blob'
      * }).then(function(blob) {
      *     // use the data
-     * }.otherwise(function(error) {
+     * }).otherwise(function(error) {
      *     // an error occurred
      * });
      */
@@ -16415,7 +16798,7 @@ define('Core/loadText',[
      *   'X-Custom-Header' : 'some value'
      * }).then(function(text) {
      *     // Do something with the text
-     * }.otherwise(function(error) {
+     * }).otherwise(function(error) {
      *     // an error occurred
      * });
      */
@@ -16469,7 +16852,7 @@ define('Core/loadJson',[
      * @example
      * Cesium.loadJson('http://someUrl.com/someJson.txt').then(function(jsonData) {
      *     // Do something with the JSON object
-     * }.otherwise(function(error) {
+     * }).otherwise(function(error) {
      *     // an error occurred
      * });
      */
@@ -17914,7 +18297,7 @@ define('Core/Transforms',[
      * //Set the view to in the inertial frame.
      * scene.preRender.addEventListener(function(scene, time) {
      *   var now = new Cesium.JulianDate();
-     *   scene.camera.transform = Cesium.Matrix4.fromRotationTranslation(Cesium.Transforms.computeTemeToPseudoFixedMatrix(now), Cesium.Cartesian3.ZERO);
+     *   viewer.camera.transform = Cesium.Matrix4.fromRotationTranslation(Cesium.Transforms.computeTemeToPseudoFixedMatrix(now));
      * });
      */
     Transforms.computeTemeToPseudoFixedMatrix = function (date, result) {
@@ -18041,7 +18424,7 @@ define('Core/Transforms',[
      * scene.preRender.addEventListener(function(scene, time) {
      *   var icrfToFixed = Cesium.Transforms.computeIcrfToFixedMatrix(time);
      *   if (Cesium.defined(icrfToFixed)) {
-     *     scene.camera.transform = Cesium.Matrix4.fromRotationTranslation(icrfToFixed, Cesium.Cartesian3.ZERO);
+     *     viewer.camera.transform = Cesium.Matrix4.fromRotationTranslation(icrfToFixed);
      *   }
      * });
      */
@@ -20286,6 +20669,26 @@ define('Core/CorridorGeometryLibrary',[
     return CorridorGeometryLibrary;
 });
 /*global define*/
+define('Core/GeometryType',[
+        './freezeObject'
+    ], function(
+        freezeObject) {
+    "use strict";
+
+    /**
+     * @private
+     */
+    var GeometryType = {
+        NONE : 0,
+        TRIANGLES : 1,
+        LINES : 2,
+        POLYLINES : 3
+    };
+
+    return freezeObject(GeometryType);
+});
+
+/*global define*/
 define('Core/PrimitiveType',[
         './freezeObject'
     ], function(
@@ -20381,11 +20784,13 @@ define('Core/Geometry',[
         './defaultValue',
         './defined',
         './DeveloperError',
+        './GeometryType',
         './PrimitiveType'
     ], function(
         defaultValue,
         defined,
         DeveloperError,
+        GeometryType,
         PrimitiveType) {
     "use strict";
 
@@ -20522,6 +20927,16 @@ define('Core/Geometry',[
          * @default undefined
          */
         this.boundingSphere = options.boundingSphere;
+
+        /**
+         * @private
+         */
+        this.geometryType = defaultValue(options.geometryType, GeometryType.NONE);
+
+        /**
+         * @private
+         */
+        this.boundingSphereCV = undefined;
     };
 
     /**
@@ -20959,14 +21374,14 @@ define('Core/VertexFormat',[
      * @alias VertexFormat
      * @constructor
      *
-     * @see Geometry#attributes
-     *
      * @example
      * // Create a vertex format with position and 2D texture coordinate attributes.
      * var format = new Cesium.VertexFormat({
      *   position : true,
      *   st : true
      * });
+     *
+     * @see Geometry#attributes
      */
     var VertexFormat = function(options) {
         options = defaultValue(options, defaultValue.EMPTY_OBJECT);
@@ -21030,6 +21445,18 @@ define('Core/VertexFormat',[
          * @default false
          */
         this.tangent = defaultValue(options.tangent, false);
+
+        /**
+         * When <code>true</code>, the vertex has an RGB color attribute.
+         * <p>
+         * 8-bit unsigned byte.  3 components per attribute.
+         * </p>
+         *
+         * @type Boolean
+         *
+         * @default false
+         */
+        this.color = defaultValue(options.color, false);
     };
 
     /**
@@ -21093,7 +21520,21 @@ define('Core/VertexFormat',[
     }));
 
     /**
-     * An immutable vertex format with all well-known attributes: position, normal, st, binormal, and tangent.
+     * An immutable vertex format with position and color attributes.
+     *
+     * @type {VertexFormat}
+     * @constant
+     *
+     * @see VertexFormat#position
+     * @see VertexFormat#color
+     */
+    VertexFormat.POSITION_AND_COLOR = freezeObject(new VertexFormat({
+        position : true,
+        color : true
+    }));
+
+    /**
+     * An immutable vertex format with well-known attributes: position, normal, st, binormal, and tangent.
      *
      * @type {VertexFormat}
      * @constant

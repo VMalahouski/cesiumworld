@@ -91,7 +91,6 @@ define([
      * @returns {Cartographic} The modified result parameter or a new Cartographic instance if one was not provided.
      */
     Cartographic.fromDegrees = function(longitude, latitude, height, result) {
-
         //>>includeStart('debug', pragmas.debug);
         if (!defined(longitude)) {
             throw new DeveloperError('longitude is required.');

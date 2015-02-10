@@ -60,7 +60,7 @@ define([
      * @returns {Canvas|Promise} The canvas element or a Promise to the canvas element that represents the generated pin.
      */
     PinBuilder.prototype.fromUrl = function(url, color, size) {
-
+      console.log('fromUrl PinBuilder.prototype');
         //>>includeStart('debug', pragmas.debug);
         if (!defined(url)) {
             throw new DeveloperError('url is required');
